@@ -1,38 +1,44 @@
-const Koa = require("koa");
-const Router = require("@koa/router");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Koa = require('koa')
+const app = new Koa()
+const views = require('koa-views')
+const json = require('koa-json')
+const onerror = require('koa-onerror')
+const bodyparser = require('koa-bodyparser')
+const logger = require('koa-logger')
 
-require("dotenv").config();
+const index = require('./routes/index')
+const users = require('./routes/users')
 
-const prompt = "Write a story about a magic backpack.";
+// error handler
+onerror(app)
 
-async function generateText(prompt) {
-  const genAI = new GoogleGenerativeAI(process.env.API_KEY);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// middlewares
+app.use(bodyparser({
+  enableTypes:['json', 'form', 'text']
+}))
+app.use(json())
+app.use(logger())
+app.use(require('koa-static')(__dirname + '/public'))
 
-  const result = await model.generateContent(prompt);
+app.use(views(__dirname + '/views', {
+  extension: 'pug'
+}))
 
-  console.log(1234, result);
-  return result;
-}
+// logger
+app.use(async (ctx, next) => {
+  const start = new Date()
+  await next()
+  const ms = new Date() - start
+  console.log(`${ctx.method} ${ctx.url} - ${ms}ms`)
+})
 
-const app = new Koa();
-const router = new Router({ prefix: "/api" });
+// routes
+app.use(index.routes(), index.allowedMethods())
+app.use(users.routes(), users.allowedMethods())
 
-router.get("/user", async (ctx) => {
-  const result = await generateText(prompt);
-  ctx.body = {
-    status: 200,
-    message: "success",
-    data: {
-      userName: "张三",
-      age: 18,
-      sex: "男",
-      c: result,
-    },
-  };
+// error-handling
+app.on('error', (err, ctx) => {
+  console.error('server error', err, ctx)
 });
 
-app.use(router.routes()).use(router.allowedMethods());
-
-app.listen(3000);
+module.exports = app
